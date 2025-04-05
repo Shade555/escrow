@@ -10,21 +10,31 @@ box = Tk()
 box.title("The Escrow - Home")
 box.geometry("600x600")
 box.config(background="#111111")
+box.resizable(False, False)
 
 # Global Styles
 btn_bg = "#222222"
 btn_fg = "#FFFFFF"
-btn_hover = "#333333"
-entry_bg = "#333333"
+btn_hover = "#00CCFF"
+entry_bg = "#222222"
 entry_fg = "#FFFFFF"
+font_main = ("Segoe UI", 12)
+font_heading = ("Segoe UI", 20, "bold")
 
-# Frame switch function
+# Hover effect
+def on_enter(e):
+    e.widget.config(bg=btn_hover)
+
+def on_leave(e):
+    e.widget.config(bg=btn_bg)
+
+# Frame switch
 def show_frame(frame):
     frame.tkraise()
     if frame == dashboard_frame:
-        dashboard.show_user_dashboard(dashboard_frame)
+        dashboard.show_user_dashboard(dashboard_frame, lambda: show_frame(home_frame))
     elif frame == admin_frame:
-        admin.show_admin_panel(admin_frame)
+        admin.show_admin_panel(admin_frame, lambda: show_frame(home_frame))
     elif frame in [login_frame, signup_frame, reset_frame]:
         clear_entries()
     update_logged_in_label()
@@ -48,17 +58,23 @@ admin_frame = Frame(box, bg="#111111")
 for frame in (home_frame, login_frame, signup_frame, dashboard_frame, reset_frame, admin_frame):
     frame.place(x=0, y=0, width=600, height=600)
 
-# Hover animations
-def on_enter(e):
-    e.widget.config(bg=btn_hover)
+# Utility
+def create_label(parent, text, size=14, bold=False, pady=10):
+    return Label(parent, text=text, font=("Segoe UI", size, "bold" if bold else ""), fg=btn_fg, bg="#111111", pady=pady)
 
-def on_leave(e):
-    e.widget.config(bg=btn_bg)
+def create_entry(parent, show=None):
+    return Entry(parent, font=font_main, fg=entry_fg, bg=entry_bg, width=30, bd=0, insertbackground="#FFFFFF", show=show, highlightthickness=1, highlightbackground="#444444")
 
-### HOME PAGE ###
-Label(home_frame, text="Welcome to The Escrow", font=("Arial", 20, "bold"), fg="#00FFCC", bg="#111111").pack(pady=20)
+def create_button(parent, text, command):
+    btn = Button(parent, text=text, font=font_main, fg=btn_fg, bg=btn_bg, width=25, height=2, bd=0, command=command, activebackground=btn_hover)
+    btn.bind("<Enter>", on_enter)
+    btn.bind("<Leave>", on_leave)
+    return btn
 
-logged_in_label = Label(home_frame, text="", font=("Arial", 12), fg="#00CCFF", bg="#111111")
+### HOME FRAME ###
+Label(home_frame, text="Welcome to The Escrow", font=font_heading, fg="#00FFCC", bg="#111111").pack(pady=30)
+
+logged_in_label = Label(home_frame, text="", font=("Segoe UI", 12), fg="#00CCFF", bg="#111111")
 logged_in_label.pack(pady=5)
 
 def update_logged_in_label():
@@ -88,83 +104,72 @@ def handle_logout():
         messagebox.showinfo("Logout", "You're not logged in.")
 
 # Home Buttons
-home_buttons = [
+for text, cmd in [
     ("Login", lambda: show_frame(login_frame)),
     ("Sign Up", lambda: show_frame(signup_frame)),
     ("Dashboard", open_dashboard),
     ("Admin Panel", open_admin_panel),
     ("Logout", handle_logout),
-]
-
-for text, cmd in home_buttons:
-    btn = Button(home_frame, text=text, font=("Arial", 14), fg=btn_fg, bg=btn_bg, width=20, height=2, command=cmd, bd=0)
-    btn.pack(pady=10)
-    btn.bind("<Enter>", on_enter)
-    btn.bind("<Leave>", on_leave)
+]:
+    create_button(home_frame, text, cmd).pack(pady=10)
 
 ### LOGIN PAGE ###
-Label(login_frame, text="Login", font=("Arial", 20, "bold"), fg="#00FFCC", bg="#111111").pack(pady=20)
+create_label(login_frame, "Login", size=20, bold=True, pady=30).pack()
 
-login_username = Entry(login_frame, font=("Arial", 14), fg=entry_fg, bg=entry_bg, width=25)
-login_password = Entry(login_frame, font=("Arial", 14), fg=entry_fg, bg=entry_bg, width=25, show="*")
-
-Label(login_frame, text="Username:", font=("Arial", 14), fg=btn_fg, bg="#111111").pack()
+create_label(login_frame, "Username:").pack()
+login_username = create_entry(login_frame)
 login_username.pack(pady=5)
 
-Label(login_frame, text="Password:", font=("Arial", 14), fg=btn_fg, bg="#111111").pack()
+create_label(login_frame, "Password:").pack()
+login_password = create_entry(login_frame, show="*")
 login_password.pack(pady=5)
 
 def try_login():
     if auth.login_user(login_username, login_password):
         show_frame(home_frame)
 
-Button(login_frame, text="Login", font=("Arial", 14), fg=btn_fg, bg=btn_bg, width=20, height=2,
-       command=try_login).pack(pady=10)
-
-Button(login_frame, text="Forgot Password?", font=("Arial", 10), fg="#00CCFF", bg="#111111", bd=0,
+create_button(login_frame, "Login", try_login).pack(pady=15)
+Button(login_frame, text="Forgot Password?", font=("Segoe UI", 10), fg="#00CCFF", bg="#111111", bd=0,
        command=lambda: show_frame(reset_frame)).pack()
+create_button(login_frame, "Back", lambda: show_frame(home_frame)).pack(pady=10)
 
-Button(login_frame, text="Back", font=("Arial", 12), fg=btn_fg, bg=btn_bg, command=lambda: show_frame(home_frame)).pack(pady=10)
-
-# Enable Enter key for login
 box.bind("<Return>", lambda e: try_login() if box.focus_get() in [login_username, login_password] else None)
 
 ### SIGN UP PAGE ###
-Label(signup_frame, text="Sign Up", font=("Arial", 20, "bold"), fg="#00FFCC", bg="#111111").pack(pady=20)
+create_label(signup_frame, "Sign Up", size=20, bold=True, pady=30).pack()
 
-signup_username = Entry(signup_frame, font=("Arial", 14), fg=entry_fg, bg=entry_bg, width=25)
-signup_password = Entry(signup_frame, font=("Arial", 14), fg=entry_fg, bg=entry_bg, width=25, show="*")
-signup_question = Entry(signup_frame, font=("Arial", 14), fg=entry_fg, bg=entry_bg, width=25)
-signup_answer = Entry(signup_frame, font=("Arial", 14), fg=entry_fg, bg=entry_bg, width=25)
+fields = [("Username:", "username"), ("Password:", "password"), ("Security Question:", "question"), ("Answer:", "answer")]
+signup_username = signup_password = signup_question = signup_answer = None
 
-for text, entry in [("Username:", signup_username), ("Password:", signup_password),
-                    ("Security Question:", signup_question), ("Answer:", signup_answer)]:
-    Label(signup_frame, text=text, font=("Arial", 14), fg=btn_fg, bg="#111111").pack()
+for label, var in fields:
+    create_label(signup_frame, label).pack()
+    entry = create_entry(signup_frame, show="*" if "pass" in var else None)
     entry.pack(pady=5)
+    if var == "username": signup_username = entry
+    elif var == "password": signup_password = entry
+    elif var == "question": signup_question = entry
+    elif var == "answer": signup_answer = entry
 
-Button(signup_frame, text="Sign Up", font=("Arial", 14), fg=btn_fg, bg=btn_bg, width=20, height=2,
-       command=lambda: auth.signup_user(signup_username, signup_password, signup_question, signup_answer)).pack(pady=10)
+create_button(signup_frame, "Sign Up", lambda: auth.signup_user(signup_username, signup_password, signup_question, signup_answer)).pack(pady=15)
+create_button(signup_frame, "Back", lambda: show_frame(home_frame)).pack(pady=10)
 
-Button(signup_frame, text="Back", font=("Arial", 12), fg=btn_fg, bg=btn_bg, command=lambda: show_frame(home_frame)).pack(pady=10)
+### RESET PAGE ###
+create_label(reset_frame, "Reset Password", size=20, bold=True, pady=30).pack()
 
-### PASSWORD RESET PAGE ###
-Label(reset_frame, text="Reset Password", font=("Arial", 20, "bold"), fg="#00FFCC", bg="#111111").pack(pady=20)
+reset_username = reset_answer = reset_newpass = None
+reset_fields = [("Username:", "username"), ("Answer to Security Question:", "answer"), ("New Password:", "newpass")]
 
-reset_username = Entry(reset_frame, font=("Arial", 14), fg=entry_fg, bg=entry_bg, width=25)
-reset_answer = Entry(reset_frame, font=("Arial", 14), fg=entry_fg, bg=entry_bg, width=25)
-reset_newpass = Entry(reset_frame, font=("Arial", 14), fg=entry_fg, bg=entry_bg, width=25, show="*")
-
-for text, entry in [("Username:", reset_username), ("Answer to Security Question:", reset_answer), ("New Password:", reset_newpass)]:
-    Label(reset_frame, text=text, font=("Arial", 14), fg=btn_fg, bg="#111111").pack()
+for label, var in reset_fields:
+    create_label(reset_frame, label).pack()
+    entry = create_entry(reset_frame, show="*" if "pass" in var else None)
     entry.pack(pady=5)
+    if var == "username": reset_username = entry
+    elif var == "answer": reset_answer = entry
+    elif var == "newpass": reset_newpass = entry
 
-Button(reset_frame, text="Reset Password", font=("Arial", 14), fg=btn_fg, bg=btn_bg, width=20, height=2,
-       command=lambda: auth.reset_password(reset_username, reset_answer, reset_newpass)).pack(pady=10)
+create_button(reset_frame, "Reset Password", lambda: auth.reset_password(reset_username, reset_answer, reset_newpass)).pack(pady=15)
+create_button(reset_frame, "Back", lambda: show_frame(home_frame)).pack(pady=10)
 
-Button(reset_frame, text="Back", font=("Arial", 12), fg=btn_fg, bg=btn_bg, command=lambda: show_frame(home_frame)).pack(pady=10)
-
-# Start on Home Frame
+# Start
 show_frame(home_frame)
-
-# Run app
 box.mainloop()

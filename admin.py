@@ -1,9 +1,10 @@
 from tkinter import *
 from tkinter import messagebox
+from functools import partial  # ✅ Import partial
 import db
 import session
 
-def show_admin_panel(frame):
+def show_admin_panel(frame, back_callback):
     for widget in frame.winfo_children():
         widget.destroy()
 
@@ -22,24 +23,30 @@ def show_admin_panel(frame):
 
         Label(frame_row, text=f"{username} ({role})", font=("Arial", 12), fg="white", bg="#222222").pack(side=LEFT, padx=10)
 
-        Button(frame_row, text="Delete", command=lambda uid=user_id, uname=username: confirm_delete(uid, uname, frame), bg="#ff4d4d", fg="white").pack(side=RIGHT, padx=5)
-        Button(frame_row, text="Promote", command=lambda uid=user_id: update_role(uid, "admin", frame), bg="#00cc66", fg="white").pack(side=RIGHT, padx=5)
-        Button(frame_row, text="Demote", command=lambda uid=user_id: update_role(uid, "user", frame), bg="#ffaa00", fg="white").pack(side=RIGHT, padx=5)
-        Button(frame_row, text="Reset PW", command=lambda uid=user_id, uname=username: open_reset_popup(uid, uname, frame), bg="#3399ff", fg="white").pack(side=RIGHT, padx=5)
+        # ✅ All buttons now safely use partial to bind correct user_id and username
+        Button(frame_row, text="Delete", command=partial(confirm_delete, user_id, username, frame, back_callback), bg="#ff4d4d", fg="white").pack(side=RIGHT, padx=5)
+        Button(frame_row, text="Promote", command=partial(update_role, user_id, "admin", frame, back_callback), bg="#00cc66", fg="white").pack(side=RIGHT, padx=5)
+        Button(frame_row, text="Demote", command=partial(update_role, user_id, "user", frame, back_callback), bg="#ffaa00", fg="white").pack(side=RIGHT, padx=5)
+        Button(frame_row, text="Reset PW", command=partial(open_reset_popup, user_id, username, frame), bg="#3399ff", fg="white").pack(side=RIGHT, padx=5)
 
-    # Back button at the bottom
-    Button(frame, text="Back", command=lambda: go_back_to_dashboard(frame),
-           bg="#444444", fg="white", font=("Arial", 12)).pack(pady=20)
+    Button(frame, text="Back", command=back_callback, bg="#444444", fg="white", font=("Arial", 12)).pack(pady=20)
 
-def confirm_delete(uid, uname, frame):
+def confirm_delete(uid, uname, frame, back_callback):
     if messagebox.askyesno("Confirm", f"Delete user '{uname}'?"):
         db.delete_user(uid)
         messagebox.showinfo("Deleted", f"User '{uname}' deleted.")
-        show_admin_panel(frame)
+        show_admin_panel(frame, back_callback)
 
-def update_role(uid, new_role, frame):
+def update_role(uid, new_role, frame, back_callback):
     db.update_role(uid, new_role)
-    show_admin_panel(frame)
+
+    # If it's the current user, refresh the session from DB
+    if session.current_user["id"] == uid:
+        updated_user = db.get_user_by_id(uid)
+        session.login(updated_user[0], updated_user[1], updated_user[2])  # id, username, role
+
+    show_admin_panel(frame, back_callback)
+
 
 def open_reset_popup(uid, uname, frame):
     popup = Toplevel(frame)
@@ -58,8 +65,3 @@ def open_reset_popup(uid, uname, frame):
             popup.destroy()
 
     Button(popup, text="Submit", command=submit).pack(pady=10)
-
-def go_back_to_dashboard(frame):
-    from Home import show_dashboard  # Import here to avoid circular import
-    show_dashboard(frame)
-
