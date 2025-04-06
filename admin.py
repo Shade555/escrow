@@ -75,7 +75,7 @@ def show_escrow_approvals(frame, back_callback):
 
     Label(escrow_win, text="Pending Escrow Transactions", font=("Arial", 16, "bold"), fg="#00FFCC", bg="#111111").pack(pady=10)
 
-    pending_txns = db.get_pending_escrow_transactions()
+    pending_txns = db.get_pending_escrow_requests()
 
     if not pending_txns:
         Label(escrow_win, text="No pending escrow transactions.", fg="white", bg="#111111").pack(pady=20)

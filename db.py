@@ -1,13 +1,18 @@
 import sqlite3
 import datetime
 import csv
+import hashlib
 
 DB_NAME = "escrow_users.db"
 
 def connect():
     return sqlite3.connect(DB_NAME)
 
-# Initialize tables
+# ---------- Helper Function for Password Hashing ----------
+def hash_password(password):
+    return hashlib.sha256(password.encode('utf-8')).hexdigest()
+
+# ---------- Initialize Tables ----------
 def init_db():
     conn = connect()
     cur = conn.cursor()
@@ -55,18 +60,49 @@ def init_db():
         FOREIGN KEY(user_id) REFERENCES users(id)
     )
     """)
-
+    
+    # Create loans table
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS loans (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        amount REAL,
+        purpose TEXT,
+        duration_months INTEGER,
+        status TEXT,
+        timestamp TEXT,
+        FOREIGN KEY(user_id) REFERENCES users(id)
+    )
+    """)
+    
+    # Create escrow table
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS escrow (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sender_id INTEGER,
+            receiver_id INTEGER,
+            amount REAL,
+            description TEXT,
+            status TEXT,  -- e.g., 'held', 'released', 'cancelled', 'Pending'
+            timestamp TEXT,
+            FOREIGN KEY(sender_id) REFERENCES users(id),
+            FOREIGN KEY(receiver_id) REFERENCES users(id)
+        )
+    """)
+    
     conn.commit()
     conn.close()
 
-# =============== USER FUNCTIONS ===============
+init_db()
 
+# ---------- USER FUNCTIONS ----------
 def create_user(username, password, question, answer):
     try:
         conn = connect()
         cur = conn.cursor()
+        hashed_pw = hash_password(password)
         cur.execute("INSERT INTO users (username, password, security_question, security_answer) VALUES (?, ?, ?, ?)",
-                    (username, password, question, answer))
+                    (username, hashed_pw, question, answer))
         conn.commit()
         return True
     except sqlite3.IntegrityError:
@@ -77,7 +113,8 @@ def create_user(username, password, question, answer):
 def validate_login(username, password):
     conn = connect()
     cur = conn.cursor()
-    cur.execute("SELECT * FROM users WHERE username=? AND password=?", (username, password))
+    hashed_pw = hash_password(password)
+    cur.execute("SELECT * FROM users WHERE username=? AND password=?", (username, hashed_pw))
     result = cur.fetchone()
     conn.close()
     return result
@@ -101,14 +138,16 @@ def get_user_by_username(username):
 def reset_password(username, new_password):
     conn = connect()
     cur = conn.cursor()
-    cur.execute("UPDATE users SET password=? WHERE username=?", (new_password, username))
+    hashed_pw = hash_password(new_password)
+    cur.execute("UPDATE users SET password=? WHERE username=?", (hashed_pw, username))
     conn.commit()
     conn.close()
 
 def reset_password_by_id(user_id, new_password):
     conn = connect()
     cur = conn.cursor()
-    cur.execute("UPDATE users SET password=? WHERE id=?", (new_password, user_id))
+    hashed_pw = hash_password(new_password)
+    cur.execute("UPDATE users SET password=? WHERE id=?", (hashed_pw, user_id))
     conn.commit()
     conn.close()
 
@@ -152,15 +191,12 @@ def add_transaction(user_id, type, amount, description):
     conn = connect()
     cur = conn.cursor()
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
     cur.execute("INSERT INTO transactions (user_id, type, amount, description, timestamp) VALUES (?, ?, ?, ?, ?)",
                 (user_id, type, amount, description, timestamp))
-
     if type == "deposit":
         cur.execute("UPDATE users SET balance = balance + ? WHERE id=?", (amount, user_id))
     elif type == "withdraw":
         cur.execute("UPDATE users SET balance = balance - ? WHERE id=?", (amount, user_id))
-
     conn.commit()
     conn.close()
 
@@ -168,16 +204,12 @@ def transfer_money(sender_id, receiver_id, amount, description):
     conn = connect()
     cur = conn.cursor()
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
     cur.execute("UPDATE users SET balance = balance - ? WHERE id=?", (amount, sender_id))
     cur.execute("UPDATE users SET balance = balance + ? WHERE id=?", (amount, receiver_id))
-
     cur.execute("INSERT INTO transactions (user_id, type, amount, description, timestamp) VALUES (?, ?, ?, ?, ?)",
                 (sender_id, "transfer_out", amount, f"To user {receiver_id}: {description}", timestamp))
-
     cur.execute("INSERT INTO transactions (user_id, type, amount, description, timestamp) VALUES (?, ?, ?, ?, ?)",
                 (receiver_id, "transfer_in", amount, f"From user {sender_id}: {description}", timestamp))
-
     conn.commit()
     conn.close()
 
@@ -189,14 +221,14 @@ def log_action(user_id, action):
     conn.commit()
     conn.close()
 
-# =============== ADMIN FUNCTIONS ===============
-
+# ---------- ADMIN FUNCTIONS ----------
 def create_admin(username, password, question, answer):
     try:
         conn = connect()
         cur = conn.cursor()
+        hashed_pw = hash_password(password)
         cur.execute("INSERT INTO admins (username, password, security_question, security_answer) VALUES (?, ?, ?, ?)",
-                    (username, password, question, answer))
+                    (username, hashed_pw, question, answer))
         conn.commit()
         return True
     except sqlite3.IntegrityError:
@@ -215,14 +247,16 @@ def get_admin_by_username(username):
 def reset_admin_password(username, new_password):
     conn = connect()
     cur = conn.cursor()
-    cur.execute("UPDATE admins SET password=? WHERE username=?", (new_password, username))
+    hashed_pw = hash_password(new_password)
+    cur.execute("UPDATE admins SET password=? WHERE username=?", (hashed_pw, username))
     conn.commit()
     conn.close()
 
 def validate_admin_login(username, password):
     conn = connect()
     cur = conn.cursor()
-    cur.execute("SELECT * FROM admins WHERE username=? AND password=?", (username, password))
+    hashed_pw = hash_password(password)
+    cur.execute("SELECT * FROM admins WHERE username=? AND password=?", (username, hashed_pw))
     result = cur.fetchone()
     conn.close()
     return result
@@ -242,7 +276,7 @@ def get_last_n_transactions(user_id, n=10):
     conn.close()
     return transactions
 
-# =============== LOAN FUNCTIONS ===============
+# ---------- LOAN FUNCTIONS ----------
 def create_loans_table():
     conn = connect()
     cur = conn.cursor()
@@ -297,7 +331,50 @@ def export_transactions_to_csv(user_id, filepath):
     
     conn.close()
 
-# =============== ESCROW FUNCTIONS ===============
+# ---------- NEW TRANSACTION HISTORY FUNCTIONS ----------
+def get_all_transactions(user_id):
+    """Get all transactions for a specific user"""
+    conn = connect()
+    cur = conn.cursor()
+    cur.execute("SELECT type, amount, description, timestamp FROM transactions WHERE user_id=? ORDER BY timestamp DESC", (user_id,))
+    transactions = cur.fetchall()
+    conn.close()
+    return transactions
+
+def get_transactions_by_type(user_id, transaction_type):
+    """Get transactions filtered by type for a specific user"""
+    conn = connect()
+    cur = conn.cursor()
+    
+    # Convert transaction type to lowercase to ensure consistency
+    transaction_type = transaction_type.lower()
+    
+    cur.execute("SELECT type, amount, description, timestamp FROM transactions WHERE user_id=? AND LOWER(type)=? ORDER BY timestamp DESC", 
+                (user_id, transaction_type))
+    transactions = cur.fetchall()
+    conn.close()
+    return transactions
+
+def export_filtered_transactions_to_csv(user_id, transaction_type, filepath):
+    """Export filtered transactions to CSV file"""
+    conn = connect()
+    cur = conn.cursor()
+    
+    # Convert transaction type to lowercase to ensure consistency
+    transaction_type = transaction_type.lower()
+    
+    cur.execute("SELECT type, amount, description, timestamp FROM transactions WHERE user_id=? AND LOWER(type)=? ORDER BY timestamp DESC", 
+                (user_id, transaction_type))
+    transactions = cur.fetchall()
+
+    with open(filepath, "w", newline="") as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(["Type", "Amount", "Description", "Timestamp"])
+        writer.writerows(transactions)
+    
+    conn.close()
+
+# ---------- ESCROW FUNCTIONS ----------
 def create_escrow_table():
     conn = connect()
     cur = conn.cursor()
@@ -408,13 +485,30 @@ def create_escrow_transaction(sender_id, recipient_username, amount, purpose):
         conn.close()
         return "Insufficient funds."
 
+    # Deduct from sender's balance
     cur.execute("UPDATE users SET balance = balance - ? WHERE id = ?", (amount, sender_id))
-
+    
+    # Record the transaction
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    # Record sender's escrow debit
+    cur.execute("""
+        INSERT INTO transactions (user_id, type, amount, description, timestamp)
+        VALUES (?, ?, ?, ?, ?)
+    """, (sender_id, "escrow_out", amount, f"Escrow to {recipient_username}: {purpose}", timestamp))
+    
+    # Record recipient's escrow credit (pending)
+    cur.execute("""
+        INSERT INTO transactions (user_id, type, amount, description, timestamp)
+        VALUES (?, ?, ?, ?, ?)
+    """, (recipient_id, "escrow_in", amount, f"Escrow from {get_user_by_id(sender_id)[1]}: {purpose}", timestamp))
+
+    # Create the escrow record
     cur.execute("""
         INSERT INTO escrow (sender_id, receiver_id, amount, description, status, timestamp)
         VALUES (?, ?, ?, ?, 'Pending', ?)
     """, (sender_id, recipient_id, amount, purpose, timestamp))
+    
     conn.commit()
     conn.close()
     return "Escrow transaction created successfully."
@@ -428,9 +522,9 @@ def get_pending_escrow_requests():
                (SELECT username FROM users WHERE id = e.receiver_id) AS receiver_username,
                e.amount, e.description, e.timestamp
         FROM escrow e
-        WHERE e.status = ?
+        WHERE e.status IN (?, ?)
         ORDER BY e.timestamp DESC
-    """, ("Pending",))  # Notice the tuple with comma
+    """, ("Pending", "held"))
     results = cur.fetchall()
     conn.close()
     return results
@@ -447,16 +541,25 @@ def update_escrow_status(escrow_id, new_status):
 
     sender_id, receiver_id, amount = row
 
-    if new_status == "Approved":
-        cur.execute("UPDATE users SET balance = balance + ? WHERE id = ?", (amount, receiver_id))
-    elif new_status == "Rejected":
-        cur.execute("UPDATE users SET balance = balance + ? WHERE id = ?", (amount, sender_id))
+    # Normalize the new_status to lowercase for comparison
+    normalized_status = new_status.lower()
 
-    cur.execute("UPDATE escrow SET status = ? WHERE id = ?", (new_status, escrow_id))
+    if normalized_status == "approved":
+        cur.execute("UPDATE users SET balance = balance + ? WHERE id = ?", (amount, receiver_id))
+        cur.execute("UPDATE escrow SET status = 'released' WHERE id = ?", (escrow_id,))
+        result_msg = "Escrow approved and amount released to receiver."
+    elif normalized_status == "rejected":
+        cur.execute("UPDATE users SET balance = balance + ? WHERE id = ?", (amount, sender_id))
+        cur.execute("UPDATE escrow SET status = 'cancelled' WHERE id = ?", (escrow_id,))
+        result_msg = "Escrow rejected and amount refunded to sender."
+    else:
+        conn.close()
+        return False, "Invalid status provided."
+
     conn.commit()
     conn.close()
-    return True, f"Transaction {new_status.lower()}."
+    return True, result_msg
 
-# Initialize DB and ensure default admin
+# ---------- Initialization ----------
 init_db()
 create_default_admin()
