@@ -8,7 +8,7 @@ import session
 # Initialize main window
 box = Tk()
 box.title("The Escrow - Home")
-box.geometry("600x600")
+box.geometry("600x700")
 box.config(background="#111111")
 box.resizable(False, False)
 

@@ -53,7 +53,7 @@ def show_user_dashboard(frame, back_callback=None):
             show_user_dashboard(frame, back_callback)
         except ValueError:
             messagebox.showerror("Invalid", "Enter a valid positive number.")
-    
+
     def open_loan_form():
         loan_win = Toplevel(frame)
         loan_win.title("Loan Application")
@@ -91,7 +91,6 @@ def show_user_dashboard(frame, back_callback=None):
         Button(loan_win, text="Submit", command=submit_loan, bg="#3399ff", fg="white").pack(pady=15)
 
     def open_loan_list():
-        user_id = session.current_user["id"]
         loans = db.get_user_loans(user_id)
 
         loan_win = Toplevel()
@@ -104,7 +103,6 @@ def show_user_dashboard(frame, back_callback=None):
             Label(loan_win, text="No loans found.", fg="white", bg="#111111", font=("Arial", 12)).pack(pady=10)
             return
 
-    # Scrollable display
         text_widget = Text(loan_win, bg="#222222", fg="white", font=("Arial", 11), wrap="word", width=60, height=15)
         text_widget.pack(padx=10, pady=10)
 
@@ -118,8 +116,7 @@ def show_user_dashboard(frame, back_callback=None):
             text_widget.insert(END, info)
 
         text_widget.config(state="disabled")
-    
-        # RD/FD Simulation
+
     def open_fd_rd_simulation():
         sim_window = Toplevel(frame)
         sim_window.title("FD/RD Simulation")
@@ -145,7 +142,7 @@ def show_user_dashboard(frame, back_callback=None):
 
                 if deposit_type.get() == "FD":
                     maturity = amount * (1 + rate * (months / 12))
-                else:  # RD - monthly contributions
+                else:  # RD
                     maturity = amount * months + (amount * months * (months + 1) * rate) / (2 * 12)
 
                 Label(sim_window, text=f"Estimated Maturity Amount: ${maturity:.2f}", fg="#00FF99", bg="#111111", font=("Arial", 12, "bold")).pack(pady=10)
@@ -154,33 +151,47 @@ def show_user_dashboard(frame, back_callback=None):
 
         Button(sim_window, text="Simulate", command=simulate_fd_rd, bg="#00cc99", fg="white", font=("Arial", 12)).pack(pady=10)
 
-    Button(frame, text="FD/RD Simulation", command=open_fd_rd_simulation, bg="#6600cc", fg="white", font=("Arial", 12)).pack(pady=10)
-    Button(amount_frame, text="Deposit", command=deposit, bg="#00cc99", fg="white", font=("Arial", 12), width=12).grid(row=1, column=0, pady=5)
-    Button(amount_frame, text="Withdraw", command=withdraw, bg="#ff5050", fg="white", font=("Arial", 12), width=12).grid(row=1, column=1, pady=5)
-        # Loan Application Button
-    Button(frame, text="Apply for Loan", command=open_loan_form, bg="#0066cc", fg="white", font=("Arial", 12)).pack(pady=(10, 0))
-        # View My Loans Button
-    Button(frame, text="View My Loans", command=open_loan_list, bg="#0055cc", fg="white", font=("Arial", 12)).pack(pady=(10, 5))
+    def open_escrow_form():
+        escrow_win = Toplevel(frame)
+        escrow_win.title("Initiate Escrow Transaction")
+        escrow_win.geometry("350x350")
+        escrow_win.configure(bg="#111111")
 
-    # Recent Transactions
-    Label(frame, text="Recent Transactions", font=("Arial", 14, "bold"), fg="#00FFCC", bg="#111111").pack(pady=(20, 10))
-    if transactions:
-        for t_type, amt, desc, time in transactions:
-            label = f"{t_type.title()} ${amt:.2f} - {desc} ({time})"
-            Label(frame, text=label, font=("Arial", 11), fg="white", bg="#111111").pack()
-    else:
-        Label(frame, text="No recent transactions found.", font=("Arial", 11), fg="gray", bg="#111111").pack()
+        Label(escrow_win, text="Escrow Transaction", font=("Arial", 16, "bold"), fg="#00FFCC", bg="#111111").pack(pady=10)
 
+        Label(escrow_win, text="Recipient Username:", bg="#111111", fg="white").pack()
+        recipient_entry = Entry(escrow_win, bg="#222222", fg="white")
+        recipient_entry.pack(pady=5)
+
+        Label(escrow_win, text="Amount:", bg="#111111", fg="white").pack()
+        amount_entry = Entry(escrow_win, bg="#222222", fg="white")
+        amount_entry.pack(pady=5)
+
+        Label(escrow_win, text="Purpose:", bg="#111111", fg="white").pack()
+        purpose_entry = Entry(escrow_win, bg="#222222", fg="white")
+        purpose_entry.pack(pady=5)
+
+        def submit_escrow():
+            recipient = recipient_entry.get().strip()
+            purpose = purpose_entry.get().strip()
+            try:
+                amount = float(amount_entry.get().strip())
+                if not recipient or not purpose or amount <= 0:
+                    raise ValueError
+                result = db.create_escrow_transaction(user_id, recipient, amount, purpose)
+                messagebox.showinfo("Escrow Status", result)
+                escrow_win.destroy()
+            except ValueError:
+                messagebox.showerror("Invalid", "Please enter valid escrow details.")
+
+        Button(escrow_win, text="Submit", command=submit_escrow, bg="#00cc99", fg="white", font=("Arial", 12)).pack(pady=10)
 
     def download_statement():
-        file_path = filedialog.asksaveasfilename(defaultextension=".csv",
-                                                filetypes=[("CSV Files", "*.csv")],
-                                                title="Save Statement As")
+        file_path = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV Files", "*.csv")], title="Save Statement As")
         if file_path:
             db.export_transactions_to_csv(user_id, file_path)
             messagebox.showinfo("Exported", "Statement downloaded successfully.")
 
-    # Mini Statement Section
     def show_mini_statement():
         mini_frame = Toplevel(frame)
         mini_frame.title("Mini Statement")
@@ -199,8 +210,25 @@ def show_user_dashboard(frame, back_callback=None):
 
         Button(mini_frame, text="Close", command=mini_frame.destroy, bg="#444444", fg="white", font=("Arial", 12)).pack(pady=15)
 
+    # Buttons
+    Button(amount_frame, text="Deposit", command=deposit, bg="#00cc99", fg="white", font=("Arial", 12), width=12).grid(row=1, column=0, pady=5)
+    Button(amount_frame, text="Withdraw", command=withdraw, bg="#ff5050", fg="white", font=("Arial", 12), width=12).grid(row=1, column=1, pady=5)
+
+    Button(frame, text="Apply for Loan", command=open_loan_form, bg="#0066cc", fg="white", font=("Arial", 12)).pack(pady=(10, 0))
+    Button(frame, text="View My Loans", command=open_loan_list, bg="#0055cc", fg="white", font=("Arial", 12)).pack(pady=(10, 0))
+    Button(frame, text="FD/RD Simulation", command=open_fd_rd_simulation, bg="#6600cc", fg="white", font=("Arial", 12)).pack(pady=10)
+    Button(frame, text="Initiate Escrow Transaction", command=open_escrow_form, bg="#cc6600", fg="white", font=("Arial", 12)).pack(pady=10)
     Button(frame, text="View Mini Statement", command=show_mini_statement, bg="#3399ff", fg="white", font=("Arial", 12)).pack(pady=10)
     Button(frame, text="Download Statement", command=download_statement, bg="#3399ff", fg="white", font=("Arial", 12), width=20).pack(pady=10)
 
+    Label(frame, text="Recent Transactions", font=("Arial", 14, "bold"), fg="#00FFCC", bg="#111111").pack(pady=(20, 10))
+    if transactions:
+        for t_type, amt, desc, time in transactions:
+            label = f"{t_type.title()} ${amt:.2f} - {desc} ({time})"
+            Label(frame, text=label, font=("Arial", 11), fg="white", bg="#111111").pack()
+    else:
+        Label(frame, text="No recent transactions found.", font=("Arial", 11), fg="gray", bg="#111111").pack()
+
     if back_callback:
-        Button(frame, text="Back", command=back_callback, bg="#444444", fg="white", font=("Arial", 12)).pack(pady=20)
+        Button(frame, text="Back", command=back_callback, bg="#444444", fg="white", font=("Arial", 12)).pack(side=BOTTOM, pady=15)
+
